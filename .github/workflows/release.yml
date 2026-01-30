@@ -53,9 +53,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release -p bbq-cli
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
@@ -63,8 +60,42 @@ jobs:
           target_commitish: ${{ github.sha }}
           generate_release_notes: true
 
-  update-tap:
+  build:
     needs: [prepare, release]
+    if: needs.prepare.outputs.should_release == 'true'
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build binary
+        run: cargo build --release -p bbq-cli --target ${{ matrix.target }}
+      - name: Package tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          bin_path="target/${{ matrix.target }}/release/bbq"
+          cp "$bin_path" dist/bbq
+          tarball="bbq-${{ needs.prepare.outputs.tag }}-${{ matrix.target }}.tar.gz"
+          tar -czf "dist/$tarball" -C dist bbq
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          files: dist/bbq-${{ needs.prepare.outputs.tag }}-${{ matrix.target }}.tar.gz
+
+  update-tap:
+    needs: [prepare, release, build]
     if: needs.prepare.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     env:
@@ -81,22 +112,42 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tarball="https://github.com/${{ github.repository }}/archive/refs/tags/${TAG}.tar.gz"
-          sha256=$(curl -L "$tarball" | sha256sum | awk '{print $1}')
+          base_url="https://github.com/${{ github.repository }}/releases/download/${TAG}"
+          macos_arm="bbq-${TAG}-aarch64-apple-darwin.tar.gz"
+          macos_intel="bbq-${TAG}-x86_64-apple-darwin.tar.gz"
+          linux_intel="bbq-${TAG}-x86_64-unknown-linux-gnu.tar.gz"
+          sha_macos_arm=$(curl -L "$base_url/$macos_arm" | sha256sum | awk '{print $1}')
+          sha_macos_intel=$(curl -L "$base_url/$macos_intel" | sha256sum | awk '{print $1}')
+          sha_linux_intel=$(curl -L "$base_url/$linux_intel" | sha256sum | awk '{print $1}')
           formula="tap/${{ env.FORMULA_PATH }}"
           mkdir -p "$(dirname "$formula")"
           cat > "$formula" <<EOF
           class Bbq < Formula
             desc "CLI and TUI for managing git worktrees"
             homepage "https://github.com/${{ github.repository }}"
-            url "$tarball"
-            sha256 "$sha256"
             license "MIT"
 
-            depends_on "rust" => :build
+            on_macos do
+              if Hardware::CPU.arm?
+                url "${base_url}/${macos_arm}"
+                sha256 "${sha_macos_arm}"
+              else
+                url "${base_url}/${macos_intel}"
+                sha256 "${sha_macos_intel}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.intel?
+                url "${base_url}/${linux_intel}"
+                sha256 "${sha_linux_intel}"
+              else
+                odie "bbq is not available for Linux ARM"
+              end
+            end
 
             def install
-              system "cargo", "install", *std_cargo_args(path: "crates/bbq-cli")
+              bin.install "bbq"
             end
 
             test do
