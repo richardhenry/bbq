@@ -387,10 +387,23 @@ fn render_worktree_info(frame: &mut Frame, area: Rect, entry: &WorktreeEntry, ap
         _ => head.clone(),
     };
 
-    let label_width =
-        label_width(&["Worktree:", "Dir:", "Repo:", "Branch:", "Head:", "Sync:", "Changes:"]);
+    let label_width = label_width(&[
+        "Worktree:",
+        "Dir:",
+        "Repo:",
+        "Branch:",
+        "Upstream:",
+        "Head:",
+        "Sync:",
+        "Changes:",
+    ]);
 
     let mut lines = Vec::new();
+    let value_width = inner.width.saturating_sub(label_width as u16) as usize;
+    let repo_value = repo.unwrap_or("none");
+    let repo_value = truncate_from_start_with_ellipsis(repo_value, value_width);
+    let branch_value = truncate_from_start_with_ellipsis(branch, value_width);
+    let dir_value = truncate_after_first_slash(&entry.worktree_path, value_width);
     lines.push(aligned_info_line(
         "Worktree: ",
         &name,
@@ -401,7 +414,7 @@ fn render_worktree_info(frame: &mut Frame, area: Rect, entry: &WorktreeEntry, ap
     ));
     lines.push(aligned_info_line(
         "Dir: ",
-        &entry.worktree_path,
+        &dir_value,
         dim,
         normal,
         label_width,
@@ -409,7 +422,7 @@ fn render_worktree_info(frame: &mut Frame, area: Rect, entry: &WorktreeEntry, ap
     ));
     lines.push(aligned_info_line(
         "Repo: ",
-        repo.unwrap_or("none"),
+        &repo_value,
         dim,
         normal,
         label_width,
@@ -417,7 +430,15 @@ fn render_worktree_info(frame: &mut Frame, area: Rect, entry: &WorktreeEntry, ap
     ));
     lines.push(aligned_info_line(
         "Branch: ",
-        branch,
+        &branch_value,
+        dim,
+        normal,
+        label_width,
+        inner.width,
+    ));
+    lines.push(aligned_info_line(
+        "Upstream: ",
+        entry.upstream.as_deref().unwrap_or("none"),
         dim,
         normal,
         label_width,
@@ -441,11 +462,12 @@ fn render_worktree_info(frame: &mut Frame, area: Rect, entry: &WorktreeEntry, ap
             inner.width,
         ));
     }
+    let sync_style = if entry.upstream.is_some() { normal } else { dim };
     lines.extend(aligned_info_lines(
         "Sync: ",
         &entry.sync_status,
         dim,
-        normal,
+        sync_style,
         label_width,
         inner.width,
     ));
@@ -563,7 +585,7 @@ fn list_item_with_right_text(
     }
 
     let max_left = content_width.saturating_sub(right_len + 1);
-    let left_text = truncate_to_width(left, max_left);
+    let left_text = truncate_left_from_start(left, max_left);
     let left_len = left_text.chars().count();
     let padding = content_width.saturating_sub(left_len + right_len);
     let spaces = " ".repeat(padding);
@@ -620,6 +642,99 @@ fn list_item_with_right_parts(
 
 fn truncate_to_width(text: &str, max: usize) -> String {
     text.chars().take(max).collect()
+}
+
+fn truncate_from_start_with_ellipsis(text: &str, max: usize) -> String {
+    if max == 0 {
+        return String::new();
+    }
+    let len = text.chars().count();
+    if len <= max {
+        return text.to_string();
+    }
+    if max == 1 {
+        return "…".to_string();
+    }
+    let mut chars: Vec<char> = text.chars().rev().take(max).collect();
+    chars.reverse();
+    if !chars.is_empty() {
+        chars[0] = '…';
+    }
+    chars.into_iter().collect()
+}
+
+fn truncate_left_from_start(text: &str, max: usize) -> String {
+    if max == 0 {
+        return String::new();
+    }
+    let mut prefix = String::new();
+    let mut remainder = String::new();
+    let mut in_prefix = true;
+    for ch in text.chars() {
+        if in_prefix && ch.is_whitespace() {
+            prefix.push(ch);
+        } else {
+            in_prefix = false;
+            remainder.push(ch);
+        }
+    }
+    let prefix_len = prefix.chars().count();
+    if prefix_len >= max {
+        return prefix.chars().take(max).collect();
+    }
+    let available = max - prefix_len;
+    let tail = truncate_from_start_with_ellipsis(&remainder, available);
+    format!("{prefix}{tail}")
+}
+
+fn truncate_after_first_slash(text: &str, max: usize) -> String {
+    if max == 0 {
+        return String::new();
+    }
+    let len = text.chars().count();
+    if len <= max {
+        return text.to_string();
+    }
+
+    let mut iter = text.chars();
+    let mut prefix = String::new();
+    let mut remainder = String::new();
+    let mut found_slash = false;
+    while let Some(ch) = iter.next() {
+        if !found_slash {
+            prefix.push(ch);
+            if ch == '/' {
+                found_slash = true;
+            }
+        } else {
+            remainder.push(ch);
+        }
+    }
+
+    let prefix_len = prefix.chars().count();
+    if prefix_len >= max {
+        return truncate_to_width(&prefix, max);
+    }
+    let available = max - prefix_len;
+    if available == 0 {
+        return prefix;
+    }
+    if remainder.is_empty() {
+        return prefix;
+    }
+    if available == 1 {
+        return format!("{prefix}…");
+    }
+    let tail_len = available - 1;
+    let tail = remainder
+        .chars()
+        .rev()
+        .take(tail_len)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<String>();
+    format!("{prefix}…{tail}")
 }
 
 fn list_highlight(app: &App) -> HighlightMode {

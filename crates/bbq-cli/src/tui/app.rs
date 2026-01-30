@@ -505,6 +505,12 @@ impl App {
                 }
 
                 let default_branch = default_branch_name(&name);
+                let default_source = default_source_branch(&repo);
+                let default_branch = if source_branch == default_source {
+                    default_branch
+                } else {
+                    source_branch.to_string()
+                };
                 self.input = Some(InputState {
                     kind: InputKind::CreateWorktreeBranch {
                         repo,
@@ -1469,8 +1475,8 @@ fn build_tree_items(
                     let branch = entry.worktree.branch.as_deref().unwrap_or("detached");
                     let display = entry.worktree.display_name();
                     items.push(TreeItem {
-                        left: format!("  {}", display),
-                        right: branch.to_string(),
+                        left: format!("  {}", branch),
+                        right: display.to_string(),
                         kind: TreeItemKind::Worktree {
                             repo: repo.name.clone(),
                             entry: entry.clone(),

@@ -75,6 +75,7 @@ pub(crate) struct WorktreeEntry {
     pub(crate) worktree: Worktree,
     pub(crate) head_author: Option<String>,
     pub(crate) head_message: Option<String>,
+    pub(crate) upstream: Option<String>,
     pub(crate) sync_status: String,
     pub(crate) worktree_path: String,
     pub(crate) changed_files: Vec<ChangedFile>,

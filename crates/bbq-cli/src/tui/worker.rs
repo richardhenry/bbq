@@ -185,7 +185,6 @@ fn is_relevant_path(path: &Path, repos_root: &Path, worktrees_root: &Path) -> bo
 }
 
 fn build_worktree_entries(repo: &Repo) -> bbq::Result<Vec<WorktreeEntry>> {
-    let upstream = default_upstream_ref(repo);
     let home_dir = home_dir_path();
     let worktrees = list_worktrees(repo)?;
     let mut entries: Vec<WorktreeEntry> = worktrees
@@ -196,6 +195,7 @@ fn build_worktree_entries(repo: &Repo) -> bbq::Result<Vec<WorktreeEntry>> {
                 Some(info) => (Some(info.author), Some(info.message)),
                 None => (None, None),
             };
+            let upstream = worktree_upstream_ref(&worktree.path);
             let sync_status = match upstream.as_ref() {
                 Some(upstream) => {
                     format_sync_status(upstream, head_divergence(&worktree.path, &upstream.rev))
@@ -211,6 +211,7 @@ fn build_worktree_entries(repo: &Repo) -> bbq::Result<Vec<WorktreeEntry>> {
                 worktree,
                 head_author,
                 head_message,
+                upstream: upstream.as_ref().map(|ref_value| ref_value.display.clone()),
                 sync_status,
                 worktree_path,
                 changed_files,
@@ -291,37 +292,11 @@ fn head_commit_info(path: &Path) -> Option<CommitInfo> {
     Some(CommitInfo { author, message })
 }
 
-fn default_upstream_ref(repo: &Repo) -> Option<UpstreamRef> {
-    if let Some(reference) = git_symbolic_ref(repo, "refs/remotes/origin/HEAD") {
-        return Some(UpstreamRef {
-            rev: reference.clone(),
-            display: display_ref_name(&reference),
-        });
-    }
-
-    let candidates = [
-        "refs/remotes/origin/main",
-        "refs/remotes/origin/master",
-        "refs/heads/main",
-        "refs/heads/master",
-    ];
-    for reference in candidates {
-        if git_ref_exists(repo, reference) {
-            return Some(UpstreamRef {
-                rev: reference.to_string(),
-                display: display_ref_name(reference),
-            });
-        }
-    }
-
-    None
-}
-
-fn git_symbolic_ref(repo: &Repo, reference: &str) -> Option<String> {
+fn worktree_upstream_ref(path: &Path) -> Option<UpstreamRef> {
     let output = Command::new("git")
-        .arg("--git-dir")
-        .arg(&repo.path)
-        .args(["symbolic-ref", "-q", reference])
+        .arg("-C")
+        .arg(path)
+        .args(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
         .output()
         .ok()?;
     if !output.status.success() {
@@ -329,22 +304,16 @@ fn git_symbolic_ref(repo: &Repo, reference: &str) -> Option<String> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let value = stdout.lines().next().unwrap_or("").trim();
+    let value = stdout.lines().next()?.trim();
     if value.is_empty() {
-        None
-    } else {
-        Some(value.to_string())
+        return None;
     }
-}
 
-fn git_ref_exists(repo: &Repo, reference: &str) -> bool {
-    Command::new("git")
-        .arg("--git-dir")
-        .arg(&repo.path)
-        .args(["show-ref", "--verify", "--quiet", reference])
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+    let display = display_ref_name(value);
+    Some(UpstreamRef {
+        rev: value.to_string(),
+        display,
+    })
 }
 
 fn display_ref_name(reference: &str) -> String {
