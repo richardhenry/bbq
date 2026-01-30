@@ -63,7 +63,7 @@ If none exist, it falls back to `main`.
 ```toml
 root_dir = "~/.bbq"
 theme = "orange"
-github_prefix = true
+github_user_prefix = true
 check_updates = true
 ```
 
@@ -71,17 +71,16 @@ All configuration options:
 
 | Option | Default (macOS) | Description |
 | --- | --- | --- |
-| `root_dir` (alias `root`) | `~/.bbq` | Base directory for repos/worktrees. `BBQ_ROOT_DIR` overrides. |
+| `root_dir` | `~/.bbq` | Base directory for repos/worktrees. `BBQ_ROOT_DIR` overrides. |
 | `theme` | `orange` | TUI accent color. |
 | `editor` | unset (auto-detect `zed`, `cursor`, `code`) | Command/app to open worktrees. Used by TUI and CLI when no `--target` is provided. |
 | `terminal` | unset (uses Terminal.app) | Command/app to open a terminal at a worktree path. On Linux, auto-detects common terminals. |
-| `github_prefix` (alias `github_user_prefix`) | `true` | Prefix new branch names with your GitHub username (requires `gh`). |
+| `github_user_prefix` | `true` | Prefix new branch names with your GitHub username (requires `gh`). |
 | `default_worktree_name` | unset | If set to `cities`, new worktrees default to a random city slug (for example `san-francisco`). |
 | `check_updates` | `true` | Check for Homebrew updates and show the upgrade prompt. |
-| `force_upgrade_prompt` | `false` | Show the upgrade prompt even if not installed via Homebrew (testing). |
 | `known_latest_version` | unset (internal) | Last version seen by the background update check; managed by `bbq`. |
 
-`BBQ_ROOT_DIR` overrides `root_dir`.
+The environment variable `BBQ_ROOT_DIR` overrides `root_dir`.
 
 ### Terminal support (Unix-like)
 
