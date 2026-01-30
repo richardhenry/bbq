@@ -461,7 +461,7 @@ fn render_worktree_info(frame: &mut Frame, area: Rect, entry: &WorktreeEntry, ap
             return;
         }
         let mut items: Vec<(String, String, Style, Style)> = if entry.changed_files.is_empty() {
-            vec![("none".to_string(), String::new(), normal, dim)]
+            vec![("none".to_string(), String::new(), dim, dim)]
         } else {
             entry
                 .changed_files
