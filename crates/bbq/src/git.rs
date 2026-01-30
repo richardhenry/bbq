@@ -241,7 +241,7 @@ pub fn create_worktree_with_name(repo: &Repo, name: &str, branch: &str) -> Resul
         return Err(BbqError::WorktreeAlreadyExists(name.to_string()));
     }
 
-    let (branch_name, start_point) = match parse_remote_branch(repo, &branch_spec)? {
+    let (branch_name, start_point, upstream) = match parse_remote_branch(repo, &branch_spec)? {
         Some((remote, remote_branch)) => {
             fetch_repo(repo, Some(&remote))?;
             let remote_ref = format!("refs/remotes/{remote}/{remote_branch}");
@@ -251,18 +251,26 @@ pub fn create_worktree_with_name(repo: &Repo, name: &str, branch: &str) -> Resul
             let branch_ref = format!("refs/heads/{remote_branch}");
             let branch_exists = git_ref_exists(&repo.path, &branch_ref)?;
             if branch_exists {
-                (remote_branch, None)
+                (remote_branch, None, None)
             } else {
-                (remote_branch.clone(), Some(format!("{remote}/{remote_branch}")))
+                let start_point = format!("{remote}/{remote_branch}");
+                (
+                    remote_branch.clone(),
+                    Some(start_point.clone()),
+                    Some(Upstream {
+                        remote,
+                        branch: remote_branch,
+                    }),
+                )
             }
         }
         None => {
             let branch_ref = format!("refs/heads/{branch_spec}");
             let branch_exists = git_ref_exists(&repo.path, &branch_ref)?;
             if branch_exists {
-                (branch_spec, None)
+                (branch_spec, None, None)
             } else {
-                (branch_spec.clone(), Some("HEAD".to_string()))
+                (branch_spec.clone(), Some("HEAD".to_string()), None)
             }
         }
     };
@@ -285,6 +293,9 @@ pub fn create_worktree_with_name(repo: &Repo, name: &str, branch: &str) -> Resul
     }
 
     run_git(args)?;
+    if let Some(upstream) = upstream {
+        set_branch_upstream(repo, &branch_name, &upstream)?;
+    }
 
     Ok(Worktree {
         path: worktree_path,
@@ -321,13 +332,21 @@ pub fn create_worktree_from(
         return Err(BbqError::WorktreeAlreadyExists(name.to_string()));
     }
 
+    fetch_origin_if_present(repo)?;
+
     let branch_ref = format!("refs/heads/{branch}");
     let branch_exists = git_ref_exists(&repo.path, &branch_ref)?;
 
-    let start_point = if branch_exists {
-        None
+    let (start_point, upstream) = if branch_exists {
+        let upstream = if branch == source_branch && !branch_has_upstream(repo, branch)? {
+            resolve_source_branch(repo, source_branch)?.upstream
+        } else {
+            None
+        };
+        (None, upstream)
     } else {
-        Some(resolve_source_branch(repo, source_branch)?)
+        let resolved = resolve_source_branch(repo, source_branch)?;
+        (Some(resolved.start_point), resolved.upstream)
     };
 
     let mut args = vec![
@@ -348,6 +367,9 @@ pub fn create_worktree_from(
     }
 
     run_git(args)?;
+    if let Some(upstream) = upstream {
+        set_branch_upstream(repo, branch, &upstream)?;
+    }
 
     Ok(Worktree {
         path: worktree_path,
@@ -366,6 +388,50 @@ fn fetch_repo(repo: &Repo, remote: Option<&str>) -> Result<()> {
         args.push(OsString::from(remote));
     }
     run_git(args)
+}
+
+fn ensure_remote_fetchspec(repo: &Repo, remote: &str) -> Result<()> {
+    if !has_remote(repo, remote)? {
+        return Ok(());
+    }
+
+    let key = format!("remote.{remote}.fetch");
+    let args = vec![
+        OsString::from("--git-dir"),
+        repo.path.as_os_str().to_os_string(),
+        OsString::from("config"),
+        OsString::from("--get-all"),
+        OsString::from(key.clone()),
+    ];
+    let output = git_command().args(&args).output()?;
+    let needle = format!("refs/remotes/{remote}/");
+    let has_tracking = output.status.success()
+        && String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .any(|line| line.contains(&needle));
+
+    if !has_tracking {
+        let refspec = format!("+refs/heads/*:refs/remotes/{remote}/*");
+        let args = vec![
+            OsString::from("--git-dir"),
+            repo.path.as_os_str().to_os_string(),
+            OsString::from("config"),
+            OsString::from("--add"),
+            OsString::from(key),
+            OsString::from(refspec),
+        ];
+        run_git(args)?;
+    }
+
+    Ok(())
+}
+
+fn fetch_origin_if_present(repo: &Repo) -> Result<()> {
+    if has_remote(repo, "origin")? {
+        ensure_remote_fetchspec(repo, "origin")?;
+        fetch_repo(repo, Some("origin"))?;
+    }
+    Ok(())
 }
 
 fn list_remotes(repo: &Repo) -> Result<Vec<String>> {
@@ -408,17 +474,64 @@ fn parse_remote_branch(repo: &Repo, branch: &str) -> Result<Option<(String, Stri
     }
 }
 
-fn resolve_source_branch(repo: &Repo, source_branch: &str) -> Result<String> {
+fn origin_branch_exists(repo: &Repo, branch: &str) -> Result<bool> {
+    let origin_ref = format!("refs/remotes/origin/{branch}");
+    git_ref_exists(&repo.path, &origin_ref)
+}
+
+struct Upstream {
+    remote: String,
+    branch: String,
+}
+
+struct ResolvedSourceBranch {
+    start_point: String,
+    upstream: Option<Upstream>,
+}
+
+fn resolve_source_branch(repo: &Repo, source_branch: &str) -> Result<ResolvedSourceBranch> {
+    if source_branch.eq_ignore_ascii_case("HEAD") {
+        return Ok(ResolvedSourceBranch {
+            start_point: "HEAD".to_string(),
+            upstream: None,
+        });
+    }
+
+    if origin_branch_exists(repo, source_branch)? {
+        let origin_ref = format!("refs/remotes/origin/{source_branch}");
+        if !git_ref_exists(&repo.path, &origin_ref)? {
+            fetch_remote_branch(repo, "origin", source_branch)?;
+        }
+        let start_point = format!("origin/{source_branch}");
+        return Ok(ResolvedSourceBranch {
+            start_point: start_point.clone(),
+            upstream: Some(Upstream {
+                remote: "origin".to_string(),
+                branch: source_branch.to_string(),
+            }),
+        });
+    }
+
     if let Some((remote, remote_branch)) = parse_remote_branch(repo, source_branch)? {
         fetch_repo(repo, Some(&remote))?;
         let remote_ref = format!("refs/remotes/{remote}/{remote_branch}");
         if !git_ref_exists(&repo.path, &remote_ref)? {
             fetch_remote_branch(repo, &remote, &remote_branch)?;
         }
-        Ok(format!("{remote}/{remote_branch}"))
-    } else {
-        Ok(source_branch.to_string())
+        let start_point = format!("{remote}/{remote_branch}");
+        return Ok(ResolvedSourceBranch {
+            start_point: start_point.clone(),
+            upstream: Some(Upstream {
+                remote,
+                branch: remote_branch,
+            }),
+        });
     }
+
+    Ok(ResolvedSourceBranch {
+        start_point: source_branch.to_string(),
+        upstream: None,
+    })
 }
 
 pub fn remove_worktree(repo: &Repo, name: &str) -> Result<()> {
@@ -486,6 +599,43 @@ fn git_ref_exists(repo_path: &Path, reference: &str) -> Result<bool> {
         OsString::from(reference),
     ];
 
+    let output = git_command().args(&args).output()?;
+    Ok(output.status.success())
+}
+
+fn set_branch_upstream(repo: &Repo, branch: &str, upstream: &Upstream) -> Result<()> {
+    ensure_remote_fetchspec(repo, &upstream.remote)?;
+    let remote_key = format!("branch.{branch}.remote");
+    let merge_key = format!("branch.{branch}.merge");
+    let merge_value = format!("refs/heads/{}", upstream.branch);
+    let args = vec![
+        OsString::from("--git-dir"),
+        repo.path.as_os_str().to_os_string(),
+        OsString::from("config"),
+        OsString::from(remote_key),
+        OsString::from(upstream.remote.clone()),
+    ];
+    run_git(args)?;
+    let args = vec![
+        OsString::from("--git-dir"),
+        repo.path.as_os_str().to_os_string(),
+        OsString::from("config"),
+        OsString::from(merge_key),
+        OsString::from(merge_value),
+    ];
+    run_git(args)
+}
+
+fn branch_has_upstream(repo: &Repo, branch: &str) -> Result<bool> {
+    let upstream_spec = format!("{branch}@{{u}}");
+    let args = vec![
+        OsString::from("--git-dir"),
+        repo.path.as_os_str().to_os_string(),
+        OsString::from("rev-parse"),
+        OsString::from("--abbrev-ref"),
+        OsString::from("--symbolic-full-name"),
+        OsString::from(upstream_spec),
+    ];
     let output = git_command().args(&args).output()?;
     Ok(output.status.success())
 }

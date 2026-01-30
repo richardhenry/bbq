@@ -185,6 +185,43 @@ fn create_worktree_from_source_branch() {
 }
 
 #[test]
+fn create_worktree_from_origin_branch_tracks_upstream() {
+    let _guard = TEST_MUTEX.lock().expect("lock test mutex");
+    let root = unique_root("create_worktree_from_origin_branch_tracks_upstream");
+    let _env = EnvGuard::set("BBQ_ROOT_DIR", &root);
+
+    let src_repo = root.join("source");
+    init_repo(&src_repo);
+    run_git(&["branch", "someuser/foo"], &src_repo);
+
+    let repo = checkout_repo(src_repo.to_str().expect("repo path")).expect("checkout repo");
+    let worktree = create_worktree_from(
+        &repo,
+        "upstream-test",
+        "someuser/foo",
+        "someuser/foo",
+    )
+    .expect("create worktree from origin branch");
+    assert_eq!(worktree.display_name(), "upstream-test");
+    assert_eq!(worktree.branch.as_deref(), Some("someuser/foo"));
+
+    let upstream = run_git_capture(
+        &[
+            "rev-parse",
+            "--abbrev-ref",
+            "--symbolic-full-name",
+            "@{u}",
+        ],
+        &worktree.path,
+    );
+    assert_eq!(upstream, "origin/someuser/foo");
+
+    remove_worktree(&repo, "upstream-test").expect("remove worktree");
+    remove_repo(&repo.name).expect("remove repo");
+    cleanup_root(&root);
+}
+
+#[test]
 fn create_worktree_with_remote_branch() {
     let _guard = TEST_MUTEX.lock().expect("lock test mutex");
     let root = unique_root("create_worktree_with_remote_branch");
