@@ -46,8 +46,7 @@ fn root_dir_from_config() -> Result<Option<PathBuf>> {
         return Ok(None);
     };
 
-    let value = parse_config_value(&contents, "root_dir")
-        .or_else(|| parse_config_value(&contents, "root"));
+    let value = parse_config_value(&contents, "root_dir");
     let Some(value) = value else {
         return Ok(None);
     };

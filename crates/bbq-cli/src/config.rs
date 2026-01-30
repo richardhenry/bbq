@@ -57,7 +57,7 @@ fn parse_config(contents: &str) -> Config {
                 config.default_worktree_name = DefaultWorktreeNameMode::from_config(&trimmed);
                 config.default_worktree_name_set = true;
             }
-            "github_prefix" | "github_user_prefix" => {
+            "github_user_prefix" => {
                 if let Some(enabled) = parse_bool(value) {
                     config.github_prefix = Some(enabled);
                 }
@@ -441,7 +441,7 @@ mod tests {
         let path = prepend_path(&bin_dir);
         let _path_env = EnvGuard::set_str("PATH", &path);
 
-        write_config(&home, "github_prefix = true");
+        write_config(&home, "github_user_prefix = true");
         let branch = default_branch_name("feature");
         assert_eq!(branch, "octocat/feature");
 
@@ -463,7 +463,7 @@ mod tests {
         let path = prepend_path(&bin_dir);
         let _path_env = EnvGuard::set_str("PATH", &path);
 
-        write_config(&home, "github_prefix = true");
+        write_config(&home, "github_user_prefix = true");
         let branch = default_branch_name("feature");
         assert_eq!(branch, "feature");
 
