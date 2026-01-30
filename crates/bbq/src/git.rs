@@ -422,19 +422,27 @@ fn resolve_source_branch(repo: &Repo, source_branch: &str) -> Result<String> {
 }
 
 pub fn remove_worktree(repo: &Repo, name: &str) -> Result<()> {
+    remove_worktree_with_force(repo, name, false)
+}
+
+pub fn remove_worktree_with_force(repo: &Repo, name: &str, force: bool) -> Result<()> {
     let worktrees = list_worktrees(repo)?;
     let worktree = worktrees
         .into_iter()
         .find(|item| worktree_matches_name(item, name))
         .ok_or_else(|| BbqError::WorktreeNotFound(name.to_string()))?;
 
-    let args = vec![
+    let mut args = vec![
         OsString::from("--git-dir"),
         repo.path.as_os_str().to_os_string(),
         OsString::from("worktree"),
         OsString::from("remove"),
-        worktree.path.as_os_str().to_os_string(),
     ];
+
+    if force {
+        args.push(OsString::from("--force"));
+    }
+    args.push(worktree.path.as_os_str().to_os_string());
 
     run_git(args)
 }

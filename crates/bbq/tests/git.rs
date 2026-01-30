@@ -8,7 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use bbq::{
     checkout_repo, checkout_repo_with_name, create_worktree, create_worktree_from,
     create_worktree_with_name, default_branch, default_remote_branch, list_repos, list_worktrees,
-    remove_repo, remove_worktree, resolve_repo, BbqError,
+    remove_repo, remove_worktree, remove_worktree_with_force, resolve_repo, BbqError,
 };
 use bbq::paths::{bbq_root, config_root, ensure_root_dirs, repos_root, worktrees_root};
 
@@ -123,6 +123,31 @@ fn create_list_and_remove_worktree() {
 
     remove_repo(&repo.name).expect("remove repo");
 
+    cleanup_root(&root);
+}
+
+#[test]
+fn remove_worktree_force_discards_changes() {
+    let _guard = TEST_MUTEX.lock().expect("lock test mutex");
+    let root = unique_root("remove_worktree_force_discards_changes");
+    let _env = EnvGuard::set("BBQ_ROOT_DIR", &root);
+
+    let src_repo = root.join("source");
+    init_repo(&src_repo);
+
+    let repo = checkout_repo(src_repo.to_str().expect("repo path")).expect("checkout repo");
+    let worktree = create_worktree(&repo, "feature-test").expect("create worktree");
+
+    fs::write(worktree.path.join("dirty.txt"), "dirty").expect("write dirty file");
+    let status = run_git_capture(&["status", "--porcelain"], &worktree.path);
+    assert!(!status.is_empty(), "expected dirty worktree status");
+
+    remove_worktree_with_force(&repo, "feature-test", true).expect("force remove worktree");
+
+    let worktrees = list_worktrees(&repo).expect("list worktrees after remove");
+    assert!(worktrees.is_empty());
+
+    remove_repo(&repo.name).expect("remove repo");
     cleanup_root(&root);
 }
 
