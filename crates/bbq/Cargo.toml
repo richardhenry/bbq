@@ -1,6 +1,6 @@
 [package]
 name = "bbq"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Core library for managing git worktrees used by the bbq CLI."
 license = "MIT"
