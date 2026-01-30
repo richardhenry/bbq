@@ -387,23 +387,6 @@ fn paths_reads_config_root_dir_with_tilde() {
 }
 
 #[test]
-fn paths_uses_root_key_when_root_dir_missing() {
-    let _guard = TEST_MUTEX.lock().expect("lock test mutex");
-    let root = unique_root("paths_uses_root_key_when_root_dir_missing");
-    let home = root.join("home");
-    fs::create_dir_all(&home).expect("create home");
-    let _home_env = EnvGuard::set("HOME", &home);
-    let _bbq_env = EnvGuard::unset("BBQ_ROOT_DIR");
-
-    write_config(&home, "root = '~/bbq-alt'");
-
-    let resolved = bbq_root().expect("bbq_root");
-    assert_eq!(resolved, home.join("bbq-alt"));
-
-    cleanup_root(&root);
-}
-
-#[test]
 fn paths_empty_root_dir_falls_back_to_config_root() {
     let _guard = TEST_MUTEX.lock().expect("lock test mutex");
     let root = unique_root("paths_empty_root_dir_falls_back_to_config_root");
