@@ -1,5 +1,7 @@
 # bbq - get cookin'
 
+![bbq screenshot](./screenshot.png)
+
 `bbq` is a small CLI/TUI for managing git worktrees. It keeps bare repositories and worktrees under a single root and provides quick commands to clone, list, open, and remove worktrees. It‘s written in Rust.
 
 ## Requirements
