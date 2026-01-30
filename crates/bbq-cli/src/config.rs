@@ -7,13 +7,11 @@ use std::sync::{Mutex, OnceLock};
 use bbq::paths;
 use bbq::DefaultWorktreeNameMode;
 
-use crate::open::OpenTarget;
 use crate::theme::{default_theme_index, theme_index_by_name};
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct Config {
     pub(crate) theme: Option<String>,
-    pub(crate) default_open: Option<String>,
     pub(crate) editor: Option<String>,
     pub(crate) terminal: Option<String>,
     pub(crate) github_prefix: Option<bool>,
@@ -54,7 +52,6 @@ fn parse_config(contents: &str) -> Config {
 
         match key {
             "theme" => config.theme = Some(trim_quotes(value)),
-            "default_open" => config.default_open = Some(trim_quotes(value)),
             "default_worktree_name" => {
                 let trimmed = trim_quotes(value);
                 config.default_worktree_name = DefaultWorktreeNameMode::from_config(&trimmed);
@@ -70,9 +67,6 @@ fn parse_config(contents: &str) -> Config {
                 if !editor.is_empty() {
                     if config.editor.is_none() {
                         config.editor = Some(editor.clone());
-                    }
-                    if config.default_open.is_none() {
-                        config.default_open = Some(editor);
                     }
                 }
             }
@@ -116,14 +110,6 @@ pub(crate) fn load_theme_index() -> usize {
     default_theme_index()
 }
 
-pub(crate) fn load_default_open_target() -> Option<OpenTarget> {
-    let config = load_config();
-    config
-        .default_open
-        .as_deref()
-        .and_then(OpenTarget::from_config)
-}
-
 pub(crate) fn load_default_worktree_name_mode() -> Option<DefaultWorktreeNameMode> {
     load_config().default_worktree_name
 }
@@ -133,11 +119,9 @@ pub(crate) fn default_worktree_name_is_configured() -> bool {
 }
 
 pub(crate) fn load_editor_command() -> Option<String> {
-    let config = load_config();
-    config
+    load_config()
         .editor
         .filter(|value| !value.trim().is_empty())
-        .or_else(|| config.default_open.filter(|value| !value.trim().is_empty()))
 }
 
 pub(crate) fn load_terminal_command() -> Option<String> {
@@ -431,10 +415,8 @@ fn parse_bool(value: &str) -> Option<bool> {
 mod tests {
     use super::{
         clear_github_username_cache, default_branch_name,
-        default_worktree_name_is_configured, load_default_open_target,
-        load_default_worktree_name_mode,
+        default_worktree_name_is_configured, load_default_worktree_name_mode,
     };
-    use crate::open::OpenTarget;
     use bbq::DefaultWorktreeNameMode;
     use std::ffi::OsString;
     use std::fs;
@@ -443,21 +425,6 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     static TEST_MUTEX: Mutex<()> = Mutex::new(());
-
-    #[test]
-    fn load_default_open_target_from_config() {
-        let _guard = TEST_MUTEX.lock().expect("lock test mutex");
-        let root = unique_root("load_default_open_target_from_config");
-        let home = root.join("home");
-        fs::create_dir_all(&home).expect("create home");
-        let _home_env = EnvGuard::set("HOME", &home);
-
-        write_config(&home, "default_open = \"VSCode\"");
-        let target = load_default_open_target();
-        assert_eq!(target, Some(OpenTarget::VsCode));
-
-        cleanup_root(&root);
-    }
 
     #[test]
     fn default_branch_name_uses_gh_username() {

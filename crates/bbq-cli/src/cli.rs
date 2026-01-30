@@ -7,12 +7,12 @@ use clap::{Parser, Subcommand};
 use std::collections::HashSet;
 
 use crate::config::{
-    default_branch_name, load_default_open_target, load_default_worktree_name_mode,
+    default_branch_name, load_default_worktree_name_mode, load_editor_command,
     load_terminal_command,
 };
 use crate::open::{
-    detect_open_targets, normalize_target, open_in_target, open_terminal_at_path_with_config,
-    OpenTarget,
+    detect_open_targets, normalize_target, open_in_editor, open_in_target,
+    open_terminal_at_path_with_config, OpenTarget,
 };
 
 #[derive(Parser)]
@@ -164,25 +164,27 @@ pub(crate) fn run_command(command: Commands) -> Result<(), Box<dyn std::error::E
                         println!("opened {} in terminal", worktree.display_name());
                         return Ok(());
                     }
+                    let selected = OpenTarget::from_config(target)
+                        .ok_or_else(|| format!("unknown target: {target}"))?;
+                    let available = detect_open_targets();
+                    if !available.contains(&selected) {
+                        return Err(format!("{} launcher not available", selected.label()).into());
+                    }
+                    open_in_target(selected, &worktree.path)?;
+                    println!("opened {} in {}", worktree.display_name(), selected.label());
+                    return Ok(());
+                }
+
+                if let Some(command) = load_editor_command().as_deref() {
+                    open_in_editor(command, &worktree.path)?;
+                    println!("opened {} in editor", worktree.display_name());
+                    return Ok(());
                 }
 
                 let available = detect_open_targets();
-                let default_target = load_default_open_target()
-                    .filter(|target| available.contains(target));
-                let selected = match target.as_deref() {
-                    Some(target) => OpenTarget::from_config(target)
-                        .ok_or_else(|| format!("unknown target: {target}"))?,
-                    None => default_target
-                        .or_else(|| available.first().copied())
-                        .ok_or_else(|| {
-                            "no open targets available; install zed, cursor, or vscode".to_string()
-                        })?,
-                };
-
-                if !available.contains(&selected) {
-                    return Err(format!("{} launcher not available", selected.label()).into());
-                }
-
+                let selected = available.first().copied().ok_or_else(|| {
+                    "no open targets available; install zed, cursor, or vscode".to_string()
+                })?;
                 open_in_target(selected, &worktree.path)?;
                 println!("opened {} in {}", worktree.display_name(), selected.label());
             }

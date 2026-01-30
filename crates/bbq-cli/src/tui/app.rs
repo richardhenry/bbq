@@ -11,7 +11,7 @@ use ratatui::widgets::ListState;
 use crate::config::{
     check_updates_enabled, default_branch_name, default_worktree_name_is_configured,
     editor_is_configured, force_upgrade_prompt_enabled, known_latest_version,
-    load_default_open_target, load_default_worktree_name_mode, load_editor_command,
+    load_default_worktree_name_mode, load_editor_command,
     load_restore_state, load_terminal_command, load_theme_index, preload_github_username,
     save_check_updates, save_default_worktree_name_mode, save_editor_command,
     save_known_latest_version, save_restore_state, save_terminal_command, save_theme_name,
@@ -399,8 +399,7 @@ impl App {
             (open_in_editor(command, &worktree.path), "editor".to_string())
         } else {
             let available = detect_open_targets();
-            let default_target = load_default_open_target().filter(|target| available.contains(target));
-            let selected = default_target.or_else(|| available.first().copied());
+            let selected = available.first().copied();
             let Some(selected) = selected else {
                 let err = io::Error::new(
                     io::ErrorKind::NotFound,

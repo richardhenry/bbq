@@ -190,8 +190,8 @@ fn worktree_rm_missing_errors() {
 }
 
 #[test]
-fn worktree_open_uses_default_open_from_config() {
-    let ctx = TestContext::new("worktree_open_uses_default_open_from_config");
+fn worktree_open_uses_editor_from_config() {
+    let ctx = TestContext::new("worktree_open_uses_editor_from_config");
     let src_repo = ctx.root.join("source");
     init_repo(&src_repo);
 
@@ -207,7 +207,7 @@ fn worktree_open_uses_default_open_from_config() {
     ]);
     assert_success_contains(output, "created feature-test");
 
-    ctx.write_config("default_open = \"code\"");
+    ctx.write_config("editor = \"code\"");
 
     let bin_dir = ctx.root.join("bin");
     fs::create_dir_all(&bin_dir).expect("create bin dir");
@@ -218,7 +218,7 @@ fn worktree_open_uses_default_open_from_config() {
         &["worktree", "open", "source", "feature-test"],
         &path,
     );
-    assert_success_contains(output, "opened feature-test in VSCode");
+    assert_success_contains(output, "opened feature-test in editor");
 }
 
 #[test]
