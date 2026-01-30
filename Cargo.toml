@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/bbq", "crates/bbq-cli"]
+resolver = "2"

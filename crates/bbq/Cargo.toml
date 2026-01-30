@@ -1,0 +1,14 @@
+[package]
+name = "bbq"
+version = "0.1.0"
+edition = "2021"
+description = "Core library for managing git worktrees used by the bbq CLI."
+license = "MIT"
+repository = "https://github.com/richardhenry/bbq"
+readme = "../../README.md"
+keywords = ["git", "worktree"]
+categories = ["development-tools"]
+
+[dependencies]
+dirs = "5.0"
+thiserror = "1.0"

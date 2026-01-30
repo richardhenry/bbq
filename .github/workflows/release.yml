@@ -1,0 +1,120 @@
+name: release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+env:
+  TAP_REPO: richardhenry/homebrew-bbq
+  FORMULA_PATH: Formula/bbq.rb
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      should_release: ${{ steps.version.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          cli_version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/bbq-cli/Cargo.toml | head -n1)
+          lib_version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/bbq/Cargo.toml | head -n1)
+          if [ -z "$cli_version" ]; then
+            echo "Unable to determine bbq-cli version." >&2
+            exit 1
+          fi
+          if [ "$cli_version" != "$lib_version" ]; then
+            echo "Version mismatch: bbq-cli $cli_version vs bbq $lib_version" >&2
+            exit 1
+          fi
+          tag="v$cli_version"
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            should_release=false
+          else
+            should_release=true
+          fi
+          echo "version=$cli_version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "should_release=$should_release" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: prepare
+    if: needs.prepare.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p bbq-cli
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+
+  update-tap:
+    needs: [prepare, release]
+    if: needs.prepare.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - name: Checkout tap
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TAP_REPO }}
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+      - name: Update formula
+        shell: bash
+        run: |
+          set -euo pipefail
+          tarball="https://github.com/${{ github.repository }}/archive/refs/tags/${TAG}.tar.gz"
+          sha256=$(curl -L "$tarball" | sha256sum | awk '{print $1}')
+          formula="tap/${{ env.FORMULA_PATH }}"
+          mkdir -p "$(dirname "$formula")"
+          cat > "$formula" <<EOF
+          class Bbq < Formula
+            desc "CLI and TUI for managing git worktrees"
+            homepage "https://github.com/${{ github.repository }}"
+            url "$tarball"
+            sha256 "$sha256"
+            license "MIT"
+
+            depends_on "rust" => :build
+
+            def install
+              system "cargo", "install", *std_cargo_args(path: "crates/bbq-cli")
+            end
+
+            test do
+              assert_match "bbq", shell_output("#{bin}/bbq --help")
+            end
+          end
+          EOF
+      - name: Commit and push
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${{ env.FORMULA_PATH }}"
+          if git diff --cached --quiet; then
+            echo "No formula changes."
+            exit 0
+          fi
+          git commit -m "bbq ${VERSION}"
+          git push
