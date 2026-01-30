@@ -10,8 +10,8 @@ use std::time::{Duration, Instant, SystemTime};
 use notify::{RecursiveMode, Watcher};
 
 use bbq::{
-    checkout_repo, create_worktree_from, list_repos, list_worktrees, remove_repo, remove_worktree,
-    Repo,
+    checkout_repo, create_worktree_from, list_repos, list_worktrees, remove_repo,
+    remove_worktree_with_force, Repo,
 };
 use bbq::paths;
 
@@ -79,10 +79,11 @@ fn spawn_worker(request_rx: mpsc::Receiver<WorkerRequest>, event_tx: mpsc::Sende
                     let result = remove_repo(&name).map_err(|err| err.to_string());
                     let _ = event_tx.send(WorkerEvent::DeleteRepoResult { name, result });
                 }
-                WorkerRequest::DeleteWorktree { repo, name } => {
+                WorkerRequest::DeleteWorktree { repo, name, force } => {
                     let repo_name = repo.name.clone();
                     let worktree_name = name.clone();
-                    let result = remove_worktree(&repo, &name).map_err(|err| err.to_string());
+                    let result =
+                        remove_worktree_with_force(&repo, &name, force).map_err(|err| err.to_string());
                     let _ = event_tx.send(WorkerEvent::DeleteWorktreeResult {
                         repo_name,
                         worktree_name,

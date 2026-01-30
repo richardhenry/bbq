@@ -67,6 +67,7 @@ pub(crate) enum InputKind {
     },
     DeleteRepo { name: String },
     DeleteWorktree { repo: Repo, name: String },
+    DeleteWorktreeForce { repo: Repo, name: String },
 }
 
 #[derive(Debug, Clone)]
@@ -138,7 +139,7 @@ pub(crate) enum WorkerRequest {
         source_branch: String,
     },
     DeleteRepo { name: String },
-    DeleteWorktree { repo: Repo, name: String },
+    DeleteWorktree { repo: Repo, name: String, force: bool },
 }
 
 #[derive(Debug)]
@@ -193,6 +194,9 @@ impl InputState {
             InputKind::CreateWorktreeBranch { .. } => "new branch > ".to_string(),
             InputKind::DeleteRepo { name } => format!("delete {} repo? > ", name),
             InputKind::DeleteWorktree { name, .. } => format!("delete {} worktree? > ", name),
+            InputKind::DeleteWorktreeForce { name, .. } => {
+                format!("delete {} worktree and discard changes? > ", name)
+            }
         }
     }
 
@@ -205,6 +209,7 @@ impl InputState {
             InputKind::DeleteRepo { .. } | InputKind::DeleteWorktree { .. } => {
                 "type 'yes' to confirm"
             }
+            InputKind::DeleteWorktreeForce { .. } => "type 'discard' to confirm",
         }
     }
 }

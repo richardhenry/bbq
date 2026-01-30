@@ -445,6 +445,15 @@ impl App {
             .unwrap_or_default()
     }
 
+    fn worktree_change_count(&self, repo: &Repo, name: &str) -> Option<usize> {
+        self.repo_worktrees.get(&repo.name).and_then(|entries| {
+            entries
+                .iter()
+                .find(|entry| entry.worktree.display_name() == name)
+                .map(|entry| entry.changed_files.len())
+        })
+    }
+
     fn submit_input(&mut self, input: InputState) -> Option<Focus> {
         match input.kind {
             InputKind::CheckoutRepo => {
@@ -560,13 +569,55 @@ impl App {
                     return None;
                 }
 
+                let change_count = self.worktree_change_count(&repo, &name).unwrap_or(0);
+                if change_count > 0 {
+                    let label = self.format_worktree_label(&repo.name, &name);
+                    let file_label = if change_count == 1 {
+                        "1 changed file".to_string()
+                    } else {
+                        format!("{change_count} changed files")
+                    };
+                    self.set_error(format!(
+                        "{} has {}. Type 'discard' to delete and lose those changes.",
+                        label, file_label
+                    ));
+                    self.input = Some(InputState {
+                        kind: InputKind::DeleteWorktreeForce { repo, name },
+                        buffer: String::new(),
+                        origin: input.origin,
+                    });
+                    return Some(Focus::Input);
+                }
+
                 let label = self.format_worktree_label(&repo.name, &name);
                 self.set_loading(
                     LoadingGroup::Action,
                     format!("Deleting worktree {}", label),
                     LoadingPriority::Action,
                 );
-                let _ = self.worker_tx.send(WorkerRequest::DeleteWorktree { repo, name });
+                let _ = self.worker_tx.send(WorkerRequest::DeleteWorktree {
+                    repo,
+                    name,
+                    force: false,
+                });
+            }
+            InputKind::DeleteWorktreeForce { repo, name } => {
+                if !discard_confirmed(&input.buffer) {
+                    self.set_status("Delete canceled");
+                    return None;
+                }
+
+                let label = self.format_worktree_label(&repo.name, &name);
+                self.set_loading(
+                    LoadingGroup::Action,
+                    format!("Deleting worktree {}", label),
+                    LoadingPriority::Action,
+                );
+                let _ = self.worker_tx.send(WorkerRequest::DeleteWorktree {
+                    repo,
+                    name,
+                    force: true,
+                });
             }
         }
         None
@@ -1142,6 +1193,16 @@ fn delete_confirmed(input: &str) -> bool {
 
     let normalized = trimmed.to_ascii_lowercase();
     "yes".starts_with(normalized.as_str())
+}
+
+fn discard_confirmed(input: &str) -> bool {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    let normalized = trimmed.to_ascii_lowercase();
+    "discard".starts_with(normalized.as_str())
 }
 
 fn is_newer_version(latest: &str, current: &str) -> bool {
