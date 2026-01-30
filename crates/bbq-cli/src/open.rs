@@ -245,6 +245,7 @@ fn shell_escape(value: &str) -> String {
     escaped
 }
 
+#[cfg(target_os = "macos")]
 fn escape_applescript(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }

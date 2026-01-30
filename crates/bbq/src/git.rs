@@ -6,7 +6,7 @@ use std::process::Command;
 
 use crate::error::{BbqError, Result};
 use crate::model::{Repo, Worktree};
-use crate::paths::{ensure_root_dirs, repos_root, worktrees_root};
+use crate::paths::{config_root, ensure_root_dirs, repos_root, worktrees_root};
 
 pub fn list_repos() -> Result<Vec<Repo>> {
     ensure_root_dirs()?;
@@ -101,7 +101,7 @@ fn run_gh_clone(slug: &str, dest: &Path) -> Result<()> {
 }
 
 fn gh_available() -> bool {
-    Command::new("gh")
+    gh_command()
         .arg("--version")
         .output()
         .map(|output| output.status.success())
@@ -127,7 +127,7 @@ pub fn default_remote_branch(repo: &Repo) -> Result<Option<String>> {
         OsString::from("symbolic-ref"),
         OsString::from("refs/remotes/origin/HEAD"),
     ];
-    let output = Command::new("git").args(&args).output()?;
+    let output = git_command().args(&args).output()?;
     if !output.status.success() {
         return Ok(None);
     }
@@ -187,7 +187,7 @@ fn symbolic_head_branch(repo: &Repo) -> Result<Option<String>> {
         OsString::from("symbolic-ref"),
         OsString::from("HEAD"),
     ];
-    let output = Command::new("git").args(&args).output()?;
+    let output = git_command().args(&args).output()?;
     if !output.status.success() {
         return Ok(None);
     }
@@ -478,7 +478,7 @@ fn git_ref_exists(repo_path: &Path, reference: &str) -> Result<bool> {
         OsString::from(reference),
     ];
 
-    let output = Command::new("git").args(&args).output()?;
+    let output = git_command().args(&args).output()?;
     Ok(output.status.success())
 }
 
@@ -666,7 +666,7 @@ fn sanitize_name(raw: &str) -> String {
 }
 
 fn run_git(args: Vec<OsString>) -> Result<()> {
-    let output = Command::new("git").args(&args).output()?;
+    let output = git_command().args(&args).output()?;
     if output.status.success() {
         return Ok(());
     }
@@ -678,7 +678,7 @@ fn run_git(args: Vec<OsString>) -> Result<()> {
 }
 
 fn run_gh(args: Vec<OsString>) -> Result<()> {
-    let output = Command::new("gh").args(&args).output().map_err(|err| {
+    let output = gh_command().args(&args).output().map_err(|err| {
         if err.kind() == io::ErrorKind::NotFound {
             BbqError::GitHubCliMissing
         } else {
@@ -696,7 +696,7 @@ fn run_gh(args: Vec<OsString>) -> Result<()> {
 }
 
 fn run_git_capture(args: Vec<OsString>) -> Result<String> {
-    let output = Command::new("git").args(&args).output()?;
+    let output = git_command().args(&args).output()?;
     if output.status.success() {
         return Ok(String::from_utf8_lossy(&output.stdout).to_string());
     }
@@ -712,4 +712,27 @@ fn args_to_string(args: &[OsString]) -> String {
         .map(|arg| arg.to_string_lossy())
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+fn git_command() -> Command {
+    let mut command = Command::new("git");
+    apply_safe_cwd(&mut command);
+    command
+}
+
+fn gh_command() -> Command {
+    let mut command = Command::new("gh");
+    apply_safe_cwd(&mut command);
+    command
+}
+
+fn apply_safe_cwd(command: &mut Command) {
+    if std::env::current_dir().is_ok() {
+        return;
+    }
+
+    if let Ok(path) = config_root() {
+        let _ = fs::create_dir_all(&path);
+        command.current_dir(path);
+    }
 }
