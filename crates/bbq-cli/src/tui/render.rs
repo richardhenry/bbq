@@ -306,13 +306,15 @@ fn render_env_info(frame: &mut Frame, area: Rect, app: &App) {
         .gh_version
         .as_deref()
         .map(|version| format_component("gh", Some(version)));
+    let home_style = if is_placeholder(home) { dim } else { normal };
+    let git_style = if is_placeholder(&git) { dim } else { normal };
 
     let mut lines = Vec::new();
     lines.push(aligned_info_line(
         "Root: ",
         home,
         dim,
-        normal,
+        home_style,
         label_width,
         inner.width,
     ));
@@ -320,16 +322,17 @@ fn render_env_info(frame: &mut Frame, area: Rect, app: &App) {
         "Git: ",
         &git,
         dim,
-        normal,
+        git_style,
         label_width,
         inner.width,
     ));
     if let Some(gh) = gh {
+        let gh_style = if is_placeholder(&gh) { dim } else { normal };
         lines.push(aligned_info_line(
             "GitHub: ",
             &gh,
             dim,
-            normal,
+            gh_style,
             label_width,
             inner.width,
         ));
@@ -400,10 +403,13 @@ fn render_worktree_info(frame: &mut Frame, area: Rect, entry: &WorktreeEntry, ap
 
     let mut lines = Vec::new();
     let value_width = inner.width.saturating_sub(label_width as u16) as usize;
-    let repo_value = repo.unwrap_or("none");
-    let repo_value = truncate_from_start_with_ellipsis(repo_value, value_width);
+    let repo_value_raw = repo.unwrap_or("none");
+    let repo_value = truncate_from_start_with_ellipsis(repo_value_raw, value_width);
     let branch_value = truncate_from_start_with_ellipsis(branch, value_width);
     let dir_value = truncate_after_first_slash(&entry.worktree_path, value_width);
+    let repo_style = if is_placeholder(repo_value_raw) { dim } else { normal };
+    let upstream_style = if entry.upstream.is_some() { normal } else { dim };
+    let head_style = if is_placeholder(&head) { dim } else { normal };
     lines.push(aligned_info_line(
         "Worktree: ",
         &name,
@@ -424,7 +430,7 @@ fn render_worktree_info(frame: &mut Frame, area: Rect, entry: &WorktreeEntry, ap
         "Repo: ",
         &repo_value,
         dim,
-        normal,
+        repo_style,
         label_width,
         inner.width,
     ));
@@ -440,7 +446,7 @@ fn render_worktree_info(frame: &mut Frame, area: Rect, entry: &WorktreeEntry, ap
         "Upstream: ",
         entry.upstream.as_deref().unwrap_or("none"),
         dim,
-        normal,
+        upstream_style,
         label_width,
         inner.width,
     ));
@@ -448,7 +454,7 @@ fn render_worktree_info(frame: &mut Frame, area: Rect, entry: &WorktreeEntry, ap
         "Head: ",
         &head_line,
         dim,
-        normal,
+        head_style,
         label_width,
         inner.width,
     ));
@@ -462,7 +468,7 @@ fn render_worktree_info(frame: &mut Frame, area: Rect, entry: &WorktreeEntry, ap
             inner.width,
         ));
     }
-    let sync_style = if entry.upstream.is_some() { normal } else { dim };
+    let sync_style = if is_placeholder(&entry.sync_status) { dim } else { normal };
     lines.extend(aligned_info_lines(
         "Sync: ",
         &entry.sync_status,
@@ -735,6 +741,14 @@ fn truncate_after_first_slash(text: &str, max: usize) -> String {
         .rev()
         .collect::<String>();
     format!("{prefix}…{tail}")
+}
+
+fn is_placeholder(value: &str) -> bool {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return true;
+    }
+    matches!(trimmed, "none" | "unknown" | "no upstream") || trimmed.ends_with("(unknown)")
 }
 
 fn list_highlight(app: &App) -> HighlightMode {

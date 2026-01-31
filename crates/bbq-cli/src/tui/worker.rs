@@ -300,7 +300,7 @@ fn worktree_upstream_ref(path: &Path) -> Option<UpstreamRef> {
         .output()
         .ok()?;
     if !output.status.success() {
-        return None;
+        return upstream_from_config(path);
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -310,10 +310,62 @@ fn worktree_upstream_ref(path: &Path) -> Option<UpstreamRef> {
     }
 
     let display = display_ref_name(value);
+    let display = strip_origin_prefix(&display);
     Some(UpstreamRef {
         rev: value.to_string(),
         display,
     })
+}
+
+fn upstream_from_config(path: &Path) -> Option<UpstreamRef> {
+    let branch = current_branch_name(path)?;
+    let remote = git_config_value(path, &format!("branch.{branch}.remote"))?;
+    let merge = git_config_value(path, &format!("branch.{branch}.merge"))?;
+    let merge_branch = merge.strip_prefix("refs/heads/").unwrap_or(&merge);
+    if merge_branch.is_empty() {
+        return None;
+    }
+    let display = display_upstream_branch(&remote, merge_branch);
+    let rev = format!("refs/remotes/{remote}/{merge_branch}");
+    Some(UpstreamRef { rev, display })
+}
+
+fn current_branch_name(path: &Path) -> Option<String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(path)
+        .args(["symbolic-ref", "--short", "HEAD"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let value = stdout.lines().next()?.trim();
+    if value.is_empty() {
+        None
+    } else {
+        Some(value.to_string())
+    }
+}
+
+fn git_config_value(path: &Path, key: &str) -> Option<String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(path)
+        .args(["config", "--get", key])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let value = stdout.lines().next()?.trim();
+    if value.is_empty() {
+        None
+    } else {
+        Some(value.to_string())
+    }
 }
 
 fn display_ref_name(reference: &str) -> String {
@@ -322,6 +374,21 @@ fn display_ref_name(reference: &str) -> String {
         .or_else(|| reference.strip_prefix("refs/heads/"))
         .unwrap_or(reference)
         .to_string()
+}
+
+fn strip_origin_prefix(reference: &str) -> String {
+    reference
+        .strip_prefix("origin/")
+        .unwrap_or(reference)
+        .to_string()
+}
+
+fn display_upstream_branch(remote: &str, branch: &str) -> String {
+    if remote == "origin" {
+        branch.to_string()
+    } else {
+        format!("{remote}/{branch}")
+    }
 }
 
 fn head_divergence(path: &Path, upstream_ref: &str) -> Option<(u32, u32)> {
