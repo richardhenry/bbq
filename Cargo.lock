@@ -60,7 +60,7 @@ dependencies = [
 
 [[package]]
 name = "bbq"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "dirs",
  "thiserror",
@@ -68,7 +68,7 @@ dependencies = [
 
 [[package]]
 name = "bbq-cli"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "bbq",
  "clap",
