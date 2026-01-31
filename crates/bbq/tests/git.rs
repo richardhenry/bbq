@@ -174,6 +174,16 @@ fn create_worktree_from_source_branch() {
         worktree.branch.as_deref(),
         Some("user/feature-from-head")
     );
+    let upstream_remote = run_git_capture(
+        &["config", "--get", "branch.user/feature-from-head.remote"],
+        &worktree.path,
+    );
+    let upstream_merge = run_git_capture(
+        &["config", "--get", "branch.user/feature-from-head.merge"],
+        &worktree.path,
+    );
+    assert_eq!(upstream_remote, "origin");
+    assert_eq!(upstream_merge, "refs/heads/user/feature-from-head");
 
     let worktrees = list_worktrees(&repo).expect("list worktrees");
     assert_eq!(worktrees.len(), 1);

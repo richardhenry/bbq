@@ -282,6 +282,7 @@ pub fn create_worktree_with_name(repo: &Repo, name: &str, branch: &str) -> Resul
         OsString::from("add"),
     ];
 
+    let created_branch = start_point.is_some();
     if let Some(start_point) = start_point {
         args.push(OsString::from("-b"));
         args.push(OsString::from(branch_name.clone()));
@@ -295,6 +296,10 @@ pub fn create_worktree_with_name(repo: &Repo, name: &str, branch: &str) -> Resul
     run_git(args)?;
     if let Some(upstream) = upstream {
         set_branch_upstream(repo, &branch_name, &upstream)?;
+    } else if created_branch {
+        if let Some(upstream) = origin_upstream_if_present(repo, &branch_name)? {
+            set_branch_upstream(repo, &branch_name, &upstream)?;
+        }
     }
 
     Ok(Worktree {
@@ -356,6 +361,7 @@ pub fn create_worktree_from(
         OsString::from("add"),
     ];
 
+    let created_branch = start_point.is_some();
     if let Some(start_point) = start_point {
         args.push(OsString::from("-b"));
         args.push(OsString::from(branch));
@@ -367,7 +373,13 @@ pub fn create_worktree_from(
     }
 
     run_git(args)?;
-    if let Some(upstream) = upstream {
+    if created_branch {
+        if let Some(upstream) = origin_upstream_if_present(repo, branch)? {
+            set_branch_upstream(repo, branch, &upstream)?;
+        } else if let Some(upstream) = upstream {
+            set_branch_upstream(repo, branch, &upstream)?;
+        }
+    } else if let Some(upstream) = upstream {
         set_branch_upstream(repo, branch, &upstream)?;
     }
 
@@ -532,6 +544,17 @@ fn resolve_source_branch(repo: &Repo, source_branch: &str) -> Result<ResolvedSou
         start_point: source_branch.to_string(),
         upstream: None,
     })
+}
+
+fn origin_upstream_if_present(repo: &Repo, branch: &str) -> Result<Option<Upstream>> {
+    if has_remote(repo, "origin")? {
+        Ok(Some(Upstream {
+            remote: "origin".to_string(),
+            branch: branch.to_string(),
+        }))
+    } else {
+        Ok(None)
+    }
 }
 
 pub fn remove_worktree(repo: &Repo, name: &str) -> Result<()> {
