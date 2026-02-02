@@ -11,7 +11,8 @@ use notify::{RecursiveMode, Watcher};
 
 use bbq::{
     checkout_repo, create_worktree_from, list_repos, list_worktrees, remove_repo,
-    remove_worktree_with_force, Repo,
+    remove_worktree_with_force, run_post_create_script, find_post_create_script,
+    Repo, ScriptOutput, POST_CREATE_SCRIPT_RELATIVE,
 };
 use bbq::paths;
 
@@ -69,10 +70,25 @@ fn spawn_worker(request_rx: mpsc::Receiver<WorkerRequest>, event_tx: mpsc::Sende
                     source_branch,
                 } => {
                     let repo_name = repo.name.clone();
-                    let result =
-                        create_worktree_from(&repo, &name, &branch, &source_branch).map_err(
-                            |err| err.to_string(),
-                        );
+                    let result = match create_worktree_from(&repo, &name, &branch, &source_branch) {
+                        Ok(worktree) => {
+                            if find_post_create_script(&worktree).is_some() {
+                                let _ = event_tx.send(WorkerEvent::WorktreeScriptStarted {
+                                    script: POST_CREATE_SCRIPT_RELATIVE.to_string(),
+                                });
+                                if let Err(err) =
+                                    run_post_create_script(&worktree, ScriptOutput::Capture)
+                                {
+                                    Err(err.to_string())
+                                } else {
+                                    Ok(worktree)
+                                }
+                            } else {
+                                Ok(worktree)
+                            }
+                        }
+                        Err(err) => Err(err.to_string()),
+                    };
                     let _ = event_tx.send(WorkerEvent::CreateWorktreeResult { repo_name, result });
                 }
                 WorkerRequest::DeleteRepo { name } => {

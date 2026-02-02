@@ -782,6 +782,13 @@ impl App {
                         self.set_error(err);
                     }
                 },
+                WorkerEvent::WorktreeScriptStarted { script } => {
+                    self.set_loading(
+                        LoadingGroup::Action,
+                        format!("Running script: {}", script),
+                        LoadingPriority::Action,
+                    );
+                }
                 WorkerEvent::CreateWorktreeResult { repo_name, result } => match result {
                     Ok(worktree) => {
                         let worktree_name = worktree.display_name();

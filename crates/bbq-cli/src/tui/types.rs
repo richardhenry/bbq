@@ -164,6 +164,9 @@ pub(crate) enum WorkerEvent {
     CheckoutRepoResult {
         result: Result<Repo, String>,
     },
+    WorktreeScriptStarted {
+        script: String,
+    },
     CreateWorktreeResult {
         repo_name: String,
         result: Result<Worktree, String>,

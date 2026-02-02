@@ -1,7 +1,7 @@
 use bbq::{
     checkout_repo, checkout_repo_with_name, create_worktree, create_worktree_from, default_branch,
-    list_repos, list_worktrees, remove_repo, remove_worktree, resolve_repo, suggest_worktree_name,
-    Repo, Worktree,
+    list_repos, list_worktrees, remove_repo, remove_worktree, resolve_repo, run_post_create_script,
+    suggest_worktree_name, Repo, ScriptOutput, Worktree,
 };
 use clap::{Parser, Subcommand};
 use std::collections::HashSet;
@@ -95,8 +95,7 @@ pub(crate) fn run_command(command: Commands) -> Result<(), Box<dyn std::error::E
                         return Err("branch name required".into());
                     }
                     let worktree = create_worktree(&repo, branch)?;
-                    println!("created {}", worktree.display_name());
-                    return Ok(());
+                    return finish_worktree_create(worktree);
                 }
 
                 if let Some(mode) = load_default_worktree_name_mode() {
@@ -125,8 +124,7 @@ pub(crate) fn run_command(command: Commands) -> Result<(), Box<dyn std::error::E
                     let branch_name = default_branch_name(&name);
                     let worktree =
                         create_worktree_from(&repo, &name, &branch_name, default_source)?;
-                    println!("created {}", worktree.display_name());
-                    return Ok(());
+                    return finish_worktree_create(worktree);
                 }
 
                 let branch = default_branch(&repo)
@@ -138,7 +136,7 @@ pub(crate) fn run_command(command: Commands) -> Result<(), Box<dyn std::error::E
                     return Err("branch name required".into());
                 }
                 let worktree = create_worktree(&repo, branch)?;
-                println!("created {}", worktree.display_name());
+                finish_worktree_create(worktree)?;
             }
             WorktreeCommand::List { repo } => {
                 let repo = resolve_repo(&repo)?;
@@ -212,4 +210,10 @@ fn find_worktree(repo: &Repo, name: &str) -> Result<Worktree, bbq::BbqError> {
                     .unwrap_or(false)
         })
         .ok_or_else(|| bbq::BbqError::WorktreeNotFound(name.to_string()))
+}
+
+fn finish_worktree_create(worktree: Worktree) -> Result<(), Box<dyn std::error::Error>> {
+    run_post_create_script(&worktree, ScriptOutput::Inherit)?;
+    println!("created {}", worktree.display_name());
+    Ok(())
 }

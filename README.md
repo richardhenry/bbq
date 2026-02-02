@@ -48,6 +48,22 @@ bbq worktree open <repo> <name> [--target zed|cursor|vscode|terminal]
 bbq worktree rm <repo> <name>
 ```
 
+## Post-create script
+
+If a repo contains a post-create script at `.bbq/worktree/post-create`, `bbq` will run it automatically after creating a worktree. The script runs with the worktree as the current working directory.
+
+The script type is determined by the shebang (`#!`) on the first line, so you can use any interpreter available on your system. For example:
+
+```sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Build a devcontainer image for this worktree.
+devcontainer build --workspace-folder .
+```
+
+If the script exits non-zero or is missing a shebang, worktree creation fails and the error is surfaced in the CLI/TUI. While the script is running in the TUI, a loading message appears: `Running script: .bbq/worktree/post-create`.
+
 ### Default branch behavior
 
 If `--branch` is omitted, `bbq` tries to use the repo's default branch in this order:

@@ -28,6 +28,10 @@ pub enum BbqError {
     GitHubCliCommand { command: String, stderr: String },
     #[error("git command failed: {command}\n{stderr}")]
     GitCommand { command: String, stderr: String },
+    #[error("script missing shebang: {0}")]
+    ScriptMissingShebang(String),
+    #[error("script failed: {script}\n{message}")]
+    ScriptFailed { script: String, message: String },
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }
