@@ -7,5 +7,5 @@ pub(crate) const STATUS_MIN_MS: u64 = 2000;
 pub(crate) const STATUS_PER_CHAR_MS: u64 = 30;
 pub(crate) const STATUS_MAX_MS: u64 = 8000;
 
-pub(crate) const SPINNER_INTERVAL_MS: u128 = 200;
-pub(crate) const SPINNER_FRAMES: [&str; 4] = ["|", "/", "-", "\\"];
+pub(crate) const SPINNER_INTERVAL_MS: u128 = 120;
+pub(crate) const SPINNER_FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
