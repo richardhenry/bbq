@@ -64,16 +64,6 @@ devcontainer build --workspace-folder .
 
 If the script exits non-zero or is missing a shebang, worktree creation fails and the error is surfaced in the CLI/TUI. While the script is running in the TUI, a loading message appears: `Running script: .bbq/worktree/post-create`.
 
-### Default branch behavior
-
-If `--branch` is omitted, `bbq` tries to use the repo's default branch in this order:
-
-1. `origin/HEAD` (if set)
-2. the bare repo's `HEAD` branch
-3. `origin/main`, `origin/master`, `main`, `master`
-
-If none exist, it falls back to `main`.
-
 ## Configuration
 
 `bbq` reads `~/.bbq/config.toml`. Example with macOS defaults:
@@ -103,6 +93,16 @@ The environment variable `BBQ_ROOT_DIR` overrides `root_dir`.
 ### Terminal support (Unix-like)
 
 If no `terminal` is configured, `bbq` tries common terminal emulators in order (`wezterm`, `alacritty`, `kitty`, `gnome-terminal`, `konsole`, `xfce4-terminal`, `x-terminal-emulator`, then `xterm`). Configure `terminal` if you use something else.
+
+### Default branch behavior
+
+If `--branch` is omitted, `bbq` tries to use the repo's default branch in this order:
+
+1. `origin/HEAD` (if set)
+2. the bare repo's `HEAD` branch
+3. `origin/main`, `origin/master`, `main`, `master`
+
+If none exist, it falls back to `main`.
 
 ## License
 
