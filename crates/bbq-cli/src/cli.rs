@@ -1,7 +1,7 @@
 use bbq::{
     checkout_repo, checkout_repo_with_name, create_worktree, create_worktree_from, default_branch,
     list_repos, list_worktrees, remove_repo, remove_worktree, resolve_repo, run_post_create_script,
-    suggest_worktree_name, Repo, ScriptOutput, Worktree,
+    run_pre_delete_script, suggest_worktree_name, Repo, ScriptOutput, Worktree,
 };
 use clap::{Parser, Subcommand};
 use std::collections::HashSet;
@@ -188,6 +188,8 @@ pub(crate) fn run_command(command: Commands) -> Result<(), Box<dyn std::error::E
             }
             WorktreeCommand::Rm { repo, name } => {
                 let repo = resolve_repo(&repo)?;
+                let worktree = find_worktree(&repo, &name)?;
+                run_pre_delete_script(&worktree, ScriptOutput::Inherit)?;
                 remove_worktree(&repo, &name)?;
                 println!("removed {}", name);
             }

@@ -48,7 +48,9 @@ bbq worktree open <repo> <name> [--target zed|cursor|vscode|terminal]
 bbq worktree rm <repo> <name>
 ```
 
-## Post-create script
+## Lifecycle scripts
+
+### Post-create script
 
 If a repo contains a post-create script at `.bbq/worktree/post-create`, `bbq` will run it automatically after creating a worktree. The script runs with the worktree as the current working directory.
 
@@ -62,7 +64,13 @@ set -euo pipefail
 devcontainer build --workspace-folder .
 ```
 
-If the script exits non-zero or is missing a shebang, worktree creation fails and the error is surfaced in the CLI/TUI. While the script is running in the TUI, a loading message appears: `Running script: .bbq/worktree/post-create`.
+If the script exits non-zero or is missing a shebang, worktree creation fails and the error is surfaced in the CLI/TUI. While the script is running in the TUI, a loading message appears: `Running post-create script ~/.../.bbq/worktree/post-create`.
+
+### Pre-delete script
+
+If a repo contains a pre-delete script at `.bbq/worktree/pre-delete`, `bbq` will run it automatically before deleting a worktree. The script runs with the worktree as the current working directory.
+
+If the script exits non-zero or is missing a shebang, worktree deletion fails and the error is surfaced in the CLI/TUI. While the script is running in the TUI, a loading message appears: `Running pre-delete script ~/.../.bbq/worktree/pre-delete`.
 
 ## Configuration
 

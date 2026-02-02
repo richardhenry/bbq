@@ -123,6 +123,38 @@ fn worktree_create_runs_post_create_script() {
 }
 
 #[test]
+fn worktree_rm_runs_pre_delete_script() {
+    let ctx = TestContext::new("worktree_rm_runs_pre_delete_script");
+    let src_repo = ctx.root.join("source");
+    init_repo(&src_repo);
+    add_pre_delete_script(&src_repo);
+
+    let output = ctx.bbq(&["repo", "clone", src_repo.to_str().expect("repo path")]);
+    assert_success_contains(output, "checked out source");
+
+    let output = ctx.bbq(&[
+        "worktree",
+        "create",
+        "source",
+        "--branch",
+        "feature-test",
+    ]);
+    assert_success_contains(output, "created feature-test");
+
+    let output = ctx.bbq(&["worktree", "rm", "source", "feature-test"]);
+    assert_success_contains(output, "removed feature-test");
+
+    let log_path = ctx
+        .root
+        .join("worktrees")
+        .join("source")
+        .join("pre-delete.log");
+    assert!(log_path.exists(), "expected pre-delete script to run");
+    let contents = fs::read_to_string(log_path).expect("read pre-delete output");
+    assert_eq!(contents.trim(), "ran");
+}
+
+#[test]
 fn worktree_open_unknown_target_fails() {
     let ctx = TestContext::new("worktree_open_unknown_target_fails");
     let src_repo = ctx.root.join("source");
@@ -361,6 +393,16 @@ fn add_post_create_script(path: &Path) {
     fs::write(&script_path, contents).expect("write post-create script");
     run_git(&["add", ".bbq/worktree/post-create"], path);
     run_git(&["commit", "--quiet", "-m", "add post-create script"], path);
+}
+
+fn add_pre_delete_script(path: &Path) {
+    let script_dir = path.join(".bbq").join("worktree");
+    fs::create_dir_all(&script_dir).expect("create script dir");
+    let script_path = script_dir.join("pre-delete");
+    let contents = "#!/bin/sh\necho ran > ../pre-delete.log\n";
+    fs::write(&script_path, contents).expect("write pre-delete script");
+    run_git(&["add", ".bbq/worktree/pre-delete"], path);
+    run_git(&["commit", "--quiet", "-m", "add pre-delete script"], path);
 }
 
 fn run_git(args: &[&str], cwd: &Path) {

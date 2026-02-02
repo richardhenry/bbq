@@ -14,8 +14,9 @@ pub use git::{
 };
 pub use model::{Repo, Worktree};
 pub use scripts::{
-    find_post_create_script, post_create_script_path, run_post_create_script, ScriptOutput,
-    POST_CREATE_SCRIPT_RELATIVE,
+    find_post_create_script, find_pre_delete_script, post_create_script_path,
+    pre_delete_script_path, run_post_create_script, run_pre_delete_script, ScriptOutput,
+    POST_CREATE_SCRIPT_RELATIVE, PRE_DELETE_SCRIPT_RELATIVE,
 };
 pub use validate::{validate_branch_name, validate_worktree_name};
 pub use worktree_names::{city_worktree_name, suggest_worktree_name, DefaultWorktreeNameMode};

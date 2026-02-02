@@ -782,10 +782,10 @@ impl App {
                         self.set_error(err);
                     }
                 },
-                WorkerEvent::WorktreeScriptStarted { script } => {
+                WorkerEvent::WorktreeScriptStarted { kind, path } => {
                     self.set_loading(
                         LoadingGroup::Action,
-                        format!("Running script: {}", script),
+                        format!("Running {kind} script {path}"),
                         LoadingPriority::Action,
                     );
                 }

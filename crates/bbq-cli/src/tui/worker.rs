@@ -11,8 +11,8 @@ use notify::{RecursiveMode, Watcher};
 
 use bbq::{
     checkout_repo, create_worktree_from, list_repos, list_worktrees, remove_repo,
-    remove_worktree_with_force, run_post_create_script, find_post_create_script,
-    Repo, ScriptOutput, POST_CREATE_SCRIPT_RELATIVE,
+    remove_worktree_with_force, run_post_create_script, run_pre_delete_script,
+    find_post_create_script, find_pre_delete_script, Repo, ScriptOutput,
 };
 use bbq::paths;
 
@@ -72,9 +72,11 @@ fn spawn_worker(request_rx: mpsc::Receiver<WorkerRequest>, event_tx: mpsc::Sende
                     let repo_name = repo.name.clone();
                     let result = match create_worktree_from(&repo, &name, &branch, &source_branch) {
                         Ok(worktree) => {
-                            if find_post_create_script(&worktree).is_some() {
+                            if let Some(script_path) = find_post_create_script(&worktree) {
+                                let display_path = display_script_path(&script_path);
                                 let _ = event_tx.send(WorkerEvent::WorktreeScriptStarted {
-                                    script: POST_CREATE_SCRIPT_RELATIVE.to_string(),
+                                    kind: "post-create".to_string(),
+                                    path: display_path,
                                 });
                                 if let Err(err) =
                                     run_post_create_script(&worktree, ScriptOutput::Capture)
@@ -98,8 +100,29 @@ fn spawn_worker(request_rx: mpsc::Receiver<WorkerRequest>, event_tx: mpsc::Sende
                 WorkerRequest::DeleteWorktree { repo, name, force } => {
                     let repo_name = repo.name.clone();
                     let worktree_name = name.clone();
-                    let result =
-                        remove_worktree_with_force(&repo, &name, force).map_err(|err| err.to_string());
+                    let result = match find_worktree_for_delete(&repo, &name) {
+                        Ok(worktree) => {
+                            if let Some(script_path) = find_pre_delete_script(&worktree) {
+                                let display_path = display_script_path(&script_path);
+                                let _ = event_tx.send(WorkerEvent::WorktreeScriptStarted {
+                                    kind: "pre-delete".to_string(),
+                                    path: display_path,
+                                });
+                                if let Err(err) =
+                                    run_pre_delete_script(&worktree, ScriptOutput::Capture)
+                                {
+                                    Err(err.to_string())
+                                } else {
+                                    remove_worktree_with_force(&repo, &name, force)
+                                        .map_err(|err| err.to_string())
+                                }
+                            } else {
+                                remove_worktree_with_force(&repo, &name, force)
+                                    .map_err(|err| err.to_string())
+                            }
+                        }
+                        Err(err) => Err(err.to_string()),
+                    };
                     let _ = event_tx.send(WorkerEvent::DeleteWorktreeResult {
                         repo_name,
                         worktree_name,
@@ -241,6 +264,21 @@ fn build_worktree_entries(repo: &Repo) -> bbq::Result<Vec<WorktreeEntry>> {
     });
 
     Ok(entries)
+}
+
+fn find_worktree_for_delete(repo: &Repo, name: &str) -> bbq::Result<bbq::Worktree> {
+    let worktrees = list_worktrees(repo)?;
+    worktrees
+        .into_iter()
+        .find(|item| {
+            item.display_name() == name
+                || item
+                    .branch
+                    .as_deref()
+                    .map(|branch| branch == name)
+                    .unwrap_or(false)
+        })
+        .ok_or_else(|| bbq::BbqError::WorktreeNotFound(name.to_string()))
 }
 
 fn load_all_data() -> bbq::Result<AllData> {
@@ -642,6 +680,13 @@ fn display_path_with_tilde(path: &Path, home: &Path) -> String {
         }
     } else {
         path.display().to_string()
+    }
+}
+
+fn display_script_path(path: &Path) -> String {
+    match home_dir_path() {
+        Some(home) => display_path_with_tilde(path, &home),
+        None => path.display().to_string(),
     }
 }
 

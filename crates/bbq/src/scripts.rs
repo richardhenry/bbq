@@ -7,6 +7,7 @@ use crate::error::{BbqError, Result};
 use crate::model::Worktree;
 
 pub const POST_CREATE_SCRIPT_RELATIVE: &str = ".bbq/worktree/post-create";
+pub const PRE_DELETE_SCRIPT_RELATIVE: &str = ".bbq/worktree/pre-delete";
 
 #[derive(Debug, Clone, Copy)]
 pub enum ScriptOutput {
@@ -18,8 +19,21 @@ pub fn post_create_script_path(worktree: &Worktree) -> PathBuf {
     worktree.path.join(POST_CREATE_SCRIPT_RELATIVE)
 }
 
+pub fn pre_delete_script_path(worktree: &Worktree) -> PathBuf {
+    worktree.path.join(PRE_DELETE_SCRIPT_RELATIVE)
+}
+
 pub fn find_post_create_script(worktree: &Worktree) -> Option<PathBuf> {
     let path = post_create_script_path(worktree);
+    if path.is_file() {
+        Some(path)
+    } else {
+        None
+    }
+}
+
+pub fn find_pre_delete_script(worktree: &Worktree) -> Option<PathBuf> {
+    let path = pre_delete_script_path(worktree);
     if path.is_file() {
         Some(path)
     } else {
@@ -32,6 +46,17 @@ pub fn run_post_create_script(
     output: ScriptOutput,
 ) -> Result<Option<PathBuf>> {
     let Some(path) = find_post_create_script(worktree) else {
+        return Ok(None);
+    };
+    run_script(worktree, &path, output)?;
+    Ok(Some(path))
+}
+
+pub fn run_pre_delete_script(
+    worktree: &Worktree,
+    output: ScriptOutput,
+) -> Result<Option<PathBuf>> {
+    let Some(path) = find_pre_delete_script(worktree) else {
         return Ok(None);
     };
     run_script(worktree, &path, output)?;
