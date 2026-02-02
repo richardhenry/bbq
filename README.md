@@ -1,6 +1,6 @@
 # bbq - get cookin'
 
-`bbq` is a small CLI/TUI that makes working with git worktrees a breeze.
+`bbq` is a small/fast terminal UI and CLI that makes working with git worktrees a breeze.
 
 ![bbq screenshot](./screenshot.png)
 
